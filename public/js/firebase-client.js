@@ -1,0 +1,203 @@
+/**
+ * Firebase Client Configuration
+ * Browser-side Firebase initialization
+ */
+
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { 
+    getAuth, 
+    createUserWithEmailAndPassword,
+    signInWithEmailAndPassword,
+    signOut,
+    onAuthStateChanged,
+    updateProfile
+} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+import { 
+    getFirestore, 
+    doc, 
+    setDoc, 
+    getDoc,
+    serverTimestamp 
+} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+// Firebase configuration - Replace with your config
+const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT_ID.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID"
+};
+
+// Initialize Firebase
+let app = null;
+let auth = null;
+let db = null;
+
+try {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+    console.log('Firebase initialized successfully');
+} catch (error) {
+    console.warn('Firebase initialization failed:', error.message);
+    console.log('Running in demo mode without Firebase');
+}
+
+/**
+ * Firebase Auth Service for browser
+ */
+class FirebaseAuthClient {
+    constructor() {
+        this.currentUser = null;
+        this.listeners = [];
+    }
+
+    /**
+     * Initialize auth state listener
+     */
+    init() {
+        if (!auth) return;
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                const profile = await this.getUserProfile(user.uid);
+                this.currentUser = { ...user, ...profile };
+            } else {
+                this.currentUser = null;
+            }
+            this.notifyListeners(this.currentUser);
+        });
+    }
+
+    /**
+     * Register new user
+     */
+    async register(email, password, displayName) {
+        if (!auth) {
+            return { success: false, error: 'Firebase not configured' };
+        }
+
+        try {
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            const user = userCredential.user;
+
+            await updateProfile(user, { displayName });
+
+            if (db) {
+                await setDoc(doc(db, 'users', user.uid), {
+                    uid: user.uid,
+                    email: user.email,
+                    displayName: displayName,
+                    role: 'user',
+                    createdAt: serverTimestamp(),
+                    lastLogin: serverTimestamp(),
+                    isActive: true
+                });
+            }
+
+            return {
+                success: true,
+                user: {
+                    uid: user.uid,
+                    email: user.email,
+                    displayName: displayName,
+                    role: 'user'
+                }
+            };
+        } catch (error) {
+            return { success: false, error: this.getErrorMessage(error.code) };
+        }
+    }
+
+    /**
+     * Login user
+     */
+    async login(email, password) {
+        if (!auth) {
+            return { success: false, error: 'Firebase not configured' };
+        }
+
+        try {
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            const user = userCredential.user;
+            const profile = await this.getUserProfile(user.uid);
+
+            return {
+                success: true,
+                user: { uid: user.uid, email: user.email, ...profile }
+            };
+        } catch (error) {
+            return { success: false, error: this.getErrorMessage(error.code) };
+        }
+    }
+
+    /**
+     * Logout user
+     */
+    async logout() {
+        if (!auth) return { success: true };
+
+        try {
+            await signOut(auth);
+            return { success: true };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    }
+
+    /**
+     * Get user profile from Firestore
+     */
+    async getUserProfile(uid) {
+        if (!db) return { role: 'user' };
+
+        try {
+            const docSnap = await getDoc(doc(db, 'users', uid));
+            return docSnap.exists() ? docSnap.data() : { role: 'user' };
+        } catch (error) {
+            console.error('Failed to get user profile:', error);
+            return { role: 'user' };
+        }
+    }
+
+    /**
+     * Convert Firebase error codes to messages
+     */
+    getErrorMessage(code) {
+        const messages = {
+            'auth/email-already-in-use': 'Email already registered',
+            'auth/invalid-email': 'Invalid email address',
+            'auth/weak-password': 'Password is too weak',
+            'auth/user-not-found': 'No account found',
+            'auth/wrong-password': 'Incorrect password',
+            'auth/too-many-requests': 'Too many attempts. Try later'
+        };
+        return messages[code] || code;
+    }
+
+    addListener(callback) {
+        this.listeners.push(callback);
+    }
+
+    notifyListeners(user) {
+        this.listeners.forEach(cb => cb(user));
+    }
+
+    getCurrentUser() {
+        return this.currentUser;
+    }
+
+    isAdmin() {
+        return this.currentUser?.role === 'admin';
+    }
+}
+
+// Export singleton instance
+const firebaseAuth = new FirebaseAuthClient();
+firebaseAuth.init();
+
+export { firebaseAuth, app, auth, db };
+export default firebaseAuth;
+

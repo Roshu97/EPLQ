@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.production
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+*.log
+
+# Firebase service account key
+*-firebase-adminsdk-*.json
+serviceAccountKey.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build outputs
+dist/
+build/
+coverage/
+
+# Test outputs
+*.test.log
+test-results/
+
+# Sensitive data
+secrets/
+*.pem
+*.key
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+
