@@ -12,8 +12,19 @@ EPLQ is a privacy-preserving location-based service that enables users to perfor
 - **Privacy-Preserving Queries**: Search for nearby POIs without exposing your actual location
 - **End-to-End Encryption**: Location data is encrypted before storage and during queries
 - **Efficient Spatial Indexing**: R-tree based index structure for fast query processing
+- **Robust Client-side Validation**: Comprehensive input checks for coordinates, radius, and forms
+- **Secure Admin Controls**: Role-based access control with optimized event delegation
 - **Real-time Performance**: Query generation optimized for mobile devices (~0.9 seconds)
 - **Comprehensive Logging**: All user actions tracked for security and debugging
+- **Enhanced UX**: Integrated loading states, toast notifications, and responsive design
+
+## 🛠️ Recent Updates
+
+- **Refactored Frontend Logic**: Modularized `app.js` for better maintainability and performance.
+- **Improved Security**: Fixed admin access control logic and hardened API error handling.
+- **Enhanced Validation**: Added robust client-side validation for all search and authentication forms.
+- **Event Delegation**: Implemented efficient event handling for dynamic UI components.
+- **Test Verification**: Verified core logic with a suite of 63 tests covering encryption, spatial indexing, and query processing.
 
 ## 🏗️ System Architecture
 

@@ -1,23 +1,13 @@
-/**
- * EPLQ Main Application
- * Handles UI interactions and API calls
- */
-
 import { firebaseAuth } from './firebase-client.js';
 
-// API base URL
 const API_BASE = '/api';
 
-// State
 const state = {
     currentPage: 'home',
     currentUser: null,
     categories: []
 };
 
-/**
- * Toast notification system
- */
 const Toast = {
     show(message, type = 'info') {
         const container = document.getElementById('toastContainer');
@@ -32,9 +22,6 @@ const Toast = {
     info(msg) { this.show(msg, 'info'); }
 };
 
-/**
- * API helper
- */
 async function apiCall(endpoint, options = {}) {
     const defaultOptions = {
         headers: {
@@ -49,16 +36,81 @@ async function apiCall(endpoint, options = {}) {
             ...options,
             headers: { ...defaultOptions.headers, ...options.headers }
         });
-        return await response.json();
+        const contentType = response.headers.get('content-type') || '';
+        let data;
+
+        if (contentType.includes('application/json')) {
+            data = await response.json();
+        } else {
+            const text = await response.text();
+            data = {
+                success: response.ok,
+                error: text || `Request failed with status ${response.status}`
+            };
+        }
+
+        if (!response.ok && data && data.success === undefined) {
+            return {
+                success: false,
+                error: data.error || `Request failed with status ${response.status}`
+            };
+        }
+
+        return data;
     } catch (error) {
         console.error('API Error:', error);
         return { success: false, error: error.message };
     }
 }
 
-/**
- * Navigation
- */
+function validateLoginForm(email, password) {
+    if (!email || !password) {
+        return 'Email and password are required';
+    }
+    if (!email.includes('@')) {
+        return 'Enter a valid email address';
+    }
+    if (password.length < 8) {
+        return 'Password must be at least 8 characters';
+    }
+    return null;
+}
+
+function validateRegisterForm(name, email, password) {
+    if (!name || name.trim().length < 2) {
+        return 'Display name must be at least 2 characters';
+    }
+    if (!email || !email.includes('@')) {
+        return 'Enter a valid email address';
+    }
+    if (password.length < 8) {
+        return 'Password must be at least 8 characters';
+    }
+    if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+        return 'Password must include upper, lower case and a number';
+    }
+    return null;
+}
+
+function validateSearchInputs(lat, lng, radius) {
+    if (Number.isNaN(lat) || Number.isNaN(lng)) {
+        return 'Please enter valid coordinates';
+    }
+    if (lat < -90 || lat > 90) {
+        return 'Latitude must be between -90 and 90';
+    }
+    if (lng < -180 || lng > 180) {
+        return 'Longitude must be between -180 and 180';
+    }
+    if (Number.isNaN(radius) || radius <= 0) {
+        return 'Radius must be a positive number';
+    }
+    if (radius > 50) {
+        return 'Radius cannot exceed 50 km';
+    }
+    return null;
+}
+
 function navigateTo(page) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
@@ -72,9 +124,6 @@ function navigateTo(page) {
     if (page === 'admin') loadAdminDashboard();
 }
 
-/**
- * Modal management
- */
 function showModal(modalId) {
     document.getElementById(modalId).classList.remove('hidden');
 }
@@ -87,9 +136,6 @@ function hideAllModals() {
     document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
 }
 
-/**
- * Update UI based on auth state
- */
 function updateAuthUI(user) {
     state.currentUser = user;
     const authSection = document.getElementById('authSection');
@@ -113,10 +159,16 @@ function updateAuthUI(user) {
     }
 }
 
-/**
- * Load categories for search
- */
 async function loadCategories() {
+    if (state.categories.length > 0) {
+        const select = document.getElementById('category');
+        select.innerHTML = '<option value="">All Categories</option>';
+        state.categories.forEach(categoryItem => {
+            select.innerHTML += `<option value="${categoryItem.name}">${categoryItem.name} (${categoryItem.count})</option>`;
+        });
+        return;
+    }
+
     const result = await apiCall('/categories');
     if (result.success) {
         state.categories = result.categories;
@@ -128,9 +180,6 @@ async function loadCategories() {
     }
 }
 
-/**
- * Handle search form submission
- */
 async function handleSearch(e) {
     e.preventDefault();
 
@@ -139,8 +188,9 @@ async function handleSearch(e) {
     const radius = parseFloat(document.getElementById('radius').value);
     const category = document.getElementById('category').value;
 
-    if (isNaN(lat) || isNaN(lng)) {
-        Toast.error('Please enter valid coordinates');
+    const validationError = validateSearchInputs(lat, lng, radius);
+    if (validationError) {
+        Toast.error(validationError);
         return;
     }
 
@@ -159,9 +209,6 @@ async function handleSearch(e) {
     displaySearchResults(result);
 }
 
-/**
- * Display search results
- */
 function displaySearchResults(result) {
     const container = document.getElementById('searchResults');
     const list = document.getElementById('resultsList');
@@ -171,7 +218,9 @@ function displaySearchResults(result) {
     container.classList.remove('hidden');
 
     if (!result.success) {
+        Toast.error(result.error || 'Search failed');
         list.innerHTML = `<div class="result-item"><p>Error: ${result.error}</p></div>`;
+        metrics.innerHTML = '';
         return;
     }
 
@@ -200,30 +249,29 @@ function displaySearchResults(result) {
     }
 }
 
-/**
- * Use browser geolocation
- */
 function useMyLocation() {
     if (!navigator.geolocation) {
         Toast.error('Geolocation not supported');
         return;
     }
 
+    const button = document.getElementById('useLocationBtn');
+    button.disabled = true;
+
     navigator.geolocation.getCurrentPosition(
-        (position) => {
+        position => {
             document.getElementById('latitude').value = position.coords.latitude.toFixed(6);
             document.getElementById('longitude').value = position.coords.longitude.toFixed(6);
             Toast.success('Location detected');
+            button.disabled = false;
         },
-        (error) => {
+        error => {
             Toast.error('Could not get location: ' + error.message);
+            button.disabled = false;
         }
     );
 }
 
-/**
- * Admin Dashboard
- */
 async function loadAdminDashboard() {
     const content = document.getElementById('adminContent');
     content.innerHTML = '<div class="loading"></div> Loading...';
@@ -267,9 +315,6 @@ async function loadAdminDashboard() {
     `;
 }
 
-/**
- * Load POIs management
- */
 async function loadPOIsManagement() {
     const content = document.getElementById('adminContent');
     content.innerHTML = '<div class="loading"></div> Loading POIs...';
@@ -283,8 +328,8 @@ async function loadPOIsManagement() {
 
     content.innerHTML = `
         <div style="margin-bottom: 1rem;">
-            <button class="btn btn-primary" onclick="showUploadForm()">+ Add POI</button>
-            <button class="btn btn-secondary" onclick="showBatchUpload()">Batch Upload</button>
+            <button class="btn btn-primary" data-action="show-upload-form">+ Add POI</button>
+            <button class="btn btn-secondary" data-action="show-batch-upload">Batch Upload</button>
         </div>
         <div id="uploadForm" class="hidden" style="margin-bottom: 1rem; padding: 1rem; background: var(--background); border-radius: var(--radius);">
             <h4>Add New POI</h4>
@@ -309,7 +354,7 @@ async function loadPOIsManagement() {
                         <td>${poi.category}</td>
                         <td>${poi.address || '-'}</td>
                         <td>
-                            <button class="btn btn-small btn-danger" onclick="deletePOI('${poi.id}')">Delete</button>
+                            <button class="btn btn-small btn-danger" data-action="delete-poi" data-id="${poi.id}">Delete</button>
                         </td>
                     </tr>
                 `).join('')}
@@ -318,9 +363,6 @@ async function loadPOIsManagement() {
     `;
 }
 
-/**
- * Load users management
- */
 async function loadUsersManagement() {
     const content = document.getElementById('adminContent');
     content.innerHTML = '<div class="loading"></div> Loading users...';
@@ -345,7 +387,12 @@ async function loadUsersManagement() {
                         <td>${user.role}</td>
                         <td>${user.isActive ? '✓ Active' : '✗ Inactive'}</td>
                         <td>
-                            <button class="btn btn-small" onclick="toggleRole('${user.uid}', '${user.role}')">
+                            <button 
+                                class="btn btn-small" 
+                                data-action="toggle-role" 
+                                data-uid="${user.uid}" 
+                                data-role="${user.role}"
+                            >
                                 ${user.role === 'admin' ? 'Demote' : 'Promote'}
                             </button>
                         </td>
@@ -356,9 +403,6 @@ async function loadUsersManagement() {
     `;
 }
 
-/**
- * Load activity logs
- */
 async function loadLogs() {
     const content = document.getElementById('adminContent');
     content.innerHTML = '<div class="loading"></div> Loading logs...';
@@ -389,39 +433,14 @@ async function loadLogs() {
     `;
 }
 
-// Global functions for inline handlers
-window.showUploadForm = () => document.getElementById('uploadForm').classList.toggle('hidden');
-window.showBatchUpload = () => Toast.info('Batch upload coming soon');
-window.deletePOI = async (id) => {
-    if (confirm('Delete this POI?')) {
-        const result = await apiCall(`/admin/pois/${id}`, { method: 'DELETE' });
-        result.success ? Toast.success('POI deleted') : Toast.error(result.error);
-        loadPOIsManagement();
-    }
-};
-window.toggleRole = async (uid, currentRole) => {
-    const newRole = currentRole === 'admin' ? 'user' : 'admin';
-    const result = await apiCall(`/admin/users/${uid}/role`, {
-        method: 'PUT',
-        body: JSON.stringify({ role: newRole })
-    });
-    result.success ? Toast.success('Role updated') : Toast.error(result.error);
-    loadUsersManagement();
-};
-
-/**
- * Initialize application
- */
 function init() {
-    // Auth state listener
     firebaseAuth.addListener(updateAuthUI);
 
-    // Navigation
     document.querySelectorAll('.nav-link').forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
             const page = e.target.dataset.page;
-            if (page === 'admin' && !state.currentUser?.role === 'admin') {
+            if (page === 'admin' && (!state.currentUser || state.currentUser.role !== 'admin')) {
                 Toast.error('Admin access required');
                 return;
             }
@@ -429,7 +448,6 @@ function init() {
         });
     });
 
-    // Auth buttons
     document.getElementById('loginBtn').addEventListener('click', () => showModal('loginModal'));
     document.getElementById('registerBtn').addEventListener('click', () => showModal('registerModal'));
     document.getElementById('logoutBtn').addEventListener('click', async () => {
@@ -438,12 +456,10 @@ function init() {
         navigateTo('home');
     });
 
-    // Modal close buttons
     document.querySelectorAll('.close-btn').forEach(btn => {
         btn.addEventListener('click', hideAllModals);
     });
 
-    // Switch between modals
     document.getElementById('switchToRegister').addEventListener('click', (e) => {
         e.preventDefault();
         hideAllModals();
@@ -455,12 +471,27 @@ function init() {
         showModal('loginModal');
     });
 
-    // Login form
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const email = document.getElementById('loginEmail').value;
         const password = document.getElementById('loginPassword').value;
+
+        const errorMessage = validateLoginForm(email, password);
+        if (errorMessage) {
+            Toast.error(errorMessage);
+            return;
+        }
+
+        const submitButton = e.target.querySelector('[type="submit"]');
+        submitButton.disabled = true;
+        const originalText = submitButton.textContent;
+        submitButton.innerHTML = '<span class="loading"></span> Logging in...';
+
         const result = await firebaseAuth.login(email, password);
+
+        submitButton.disabled = false;
+        submitButton.textContent = originalText;
+
         if (result.success) {
             hideAllModals();
             Toast.success('Welcome back!');
@@ -469,13 +500,28 @@ function init() {
         }
     });
 
-    // Register form
     document.getElementById('registerForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const name = document.getElementById('registerName').value;
         const email = document.getElementById('registerEmail').value;
         const password = document.getElementById('registerPassword').value;
+
+        const errorMessage = validateRegisterForm(name, email, password);
+        if (errorMessage) {
+            Toast.error(errorMessage);
+            return;
+        }
+
+        const submitButton = e.target.querySelector('[type="submit"]');
+        submitButton.disabled = true;
+        const originalText = submitButton.textContent;
+        submitButton.innerHTML = '<span class="loading"></span> Creating...';
+
         const result = await firebaseAuth.register(email, password, name);
+
+        submitButton.disabled = false;
+        submitButton.textContent = originalText;
+
         if (result.success) {
             hideAllModals();
             Toast.success('Account created!');
@@ -484,14 +530,11 @@ function init() {
         }
     });
 
-    // Search form
     document.getElementById('searchForm').addEventListener('submit', handleSearch);
     document.getElementById('useLocationBtn').addEventListener('click', useMyLocation);
 
-    // Get Started button
     document.getElementById('getStartedBtn').addEventListener('click', () => navigateTo('search'));
 
-    // Admin tabs
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -504,9 +547,114 @@ function init() {
         });
     });
 
+    const adminContent = document.getElementById('adminContent');
+    adminContent.addEventListener('click', async (event) => {
+        const target = event.target.closest('button');
+        if (!target || !adminContent.contains(target)) return;
+
+        const action = target.dataset.action;
+        if (action === 'show-upload-form') {
+            const uploadForm = document.getElementById('uploadForm');
+            uploadForm.classList.toggle('hidden');
+        } else if (action === 'show-batch-upload') {
+            Toast.info('Batch upload coming soon');
+        } else if (action === 'delete-poi') {
+            const poiId = target.dataset.id;
+            if (!poiId) return;
+            if (!confirm('Delete this POI?')) return;
+            const result = await apiCall(`/admin/pois/${poiId}`, { method: 'DELETE' });
+            if (result.success) {
+                Toast.success('POI deleted');
+                loadPOIsManagement();
+            } else {
+                Toast.error(result.error || 'Failed to delete POI');
+            }
+        } else if (action === 'toggle-role') {
+            const userId = target.dataset.uid;
+            const currentRole = target.dataset.role;
+            if (!userId || !currentRole) return;
+            const newRole = currentRole === 'admin' ? 'user' : 'admin';
+            const result = await apiCall(`/admin/users/${userId}/role`, {
+                method: 'PUT',
+                body: JSON.stringify({ role: newRole })
+            });
+            if (result.success) {
+                Toast.success('Role updated');
+                loadUsersManagement();
+            } else {
+                Toast.error(result.error || 'Failed to update role');
+            }
+        }
+    });
+
+    adminContent.addEventListener('submit', async (event) => {
+        if (event.target.id !== 'poiForm') return;
+        event.preventDefault();
+
+        const nameInput = document.getElementById('poiName');
+        const latInput = document.getElementById('poiLat');
+        const lngInput = document.getElementById('poiLng');
+        const categoryInput = document.getElementById('poiCategory');
+        const addressInput = document.getElementById('poiAddress');
+        const descInput = document.getElementById('poiDesc');
+
+        const name = nameInput.value.trim();
+        const latitude = parseFloat(latInput.value);
+        const longitude = parseFloat(lngInput.value);
+        const category = categoryInput.value.trim();
+        const address = addressInput.value.trim();
+        const description = descInput.value.trim();
+
+        if (!name || name.length < 2) {
+            Toast.error('POI name must be at least 2 characters');
+            return;
+        }
+        if (Number.isNaN(latitude) || latitude < -90 || latitude > 90) {
+            Toast.error('Latitude must be between -90 and 90');
+            return;
+        }
+        if (Number.isNaN(longitude) || longitude < -180 || longitude > 180) {
+            Toast.error('Longitude must be between -180 and 180');
+            return;
+        }
+        if (!category) {
+            Toast.error('Category is required');
+            return;
+        }
+
+        const submitButton = event.target.querySelector('[type="submit"]');
+        submitButton.disabled = true;
+        const originalText = submitButton.textContent;
+        submitButton.innerHTML = '<span class="loading"></span> Saving...';
+
+        const result = await apiCall('/admin/pois', {
+            method: 'POST',
+            body: JSON.stringify({
+                name,
+                latitude,
+                longitude,
+                category,
+                address,
+                description
+            })
+        });
+
+        submitButton.disabled = false;
+        submitButton.textContent = originalText;
+
+        if (result.success) {
+            Toast.success('POI saved');
+            event.target.reset();
+            const uploadForm = document.getElementById('uploadForm');
+            uploadForm.classList.add('hidden');
+            loadPOIsManagement();
+        } else {
+            const errorMessage = Array.isArray(result.errors) ? result.errors.join(', ') : result.error;
+            Toast.error(errorMessage || 'Failed to save POI');
+        }
+    });
+
     console.log('EPLQ Application initialized');
 }
 
-// Start app when DOM is ready
 document.addEventListener('DOMContentLoaded', init);
-
