@@ -8,6 +8,7 @@ import { AuthService } from '../auth/authService.js';
 import { AdminService } from '../admin/adminService.js';
 import { UserService } from '../user/userService.js';
 import { EPLQLogger } from '../utils/logger.js';
+import { firebaseConfig } from '../../config/firebase.config.js';
 
 const router = express.Router();
 
@@ -26,6 +27,19 @@ const userService = new UserService();
 // Health check
 router.get('/health', (req, res) => {
     res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
+// Firebase config for client
+router.get('/firebase-config', (req, res) => {
+    res.json({
+        apiKey: firebaseConfig.apiKey,
+        authDomain: firebaseConfig.authDomain,
+        projectId: firebaseConfig.projectId,
+        storageBucket: firebaseConfig.storageBucket,
+        messagingSenderId: firebaseConfig.messagingSenderId,
+        appId: firebaseConfig.appId,
+        measurementId: firebaseConfig.measurementId
+    });
 });
 
 // Auth routes
@@ -161,4 +175,3 @@ router.get('/stats', (req, res) => {
 });
 
 export default router;
-

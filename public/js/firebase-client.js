@@ -20,14 +20,14 @@ import {
     serverTimestamp 
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-// Firebase configuration - Replace with your config
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_SENDER_ID",
-    appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyAf7qB0O7N-AUMOk0F2x046SKYaRFaDYGo",
+    authDomain: "eplq-abfa5.firebaseapp.com",
+    projectId: "eplq-abfa5",
+    storageBucket: "eplq-abfa5.firebasestorage.app",
+    messagingSenderId: "684157525937",
+    appId: "1:684157525937:web:b2f5d9fab8fdb40742e790",
+    measurementId: "G-LMZ0J3K7HX"
 };
 
 // Initialize Firebase
@@ -200,4 +200,3 @@ firebaseAuth.init();
 
 export { firebaseAuth, app, auth, db };
 export default firebaseAuth;
-
