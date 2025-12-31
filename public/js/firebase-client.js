@@ -35,7 +35,21 @@ let app = null;
 let auth = null;
 let db = null;
 
+/**
+ * Validate Firebase configuration
+ */
+function validateConfig(config) {
+    const isPlaceholder = config.apiKey.includes('YOUR_') || 
+                         config.apiKey === "AIzaSyAf7qB0O7N-AUMOk0F2x046SKYaRFaDYGo";
+    
+    if (isPlaceholder) {
+        console.warn('⚠️ Firebase API Key appears to be a placeholder. Authentication will likely fail with 400 errors.');
+        console.warn('Please update the firebaseConfig in public/js/firebase-client.js with your actual project credentials from the Firebase Console.');
+    }
+}
+
 try {
+    validateConfig(firebaseConfig);
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
@@ -107,6 +121,7 @@ class FirebaseAuthClient {
                 }
             };
         } catch (error) {
+            console.error('Firebase registration error:', error);
             return { success: false, error: this.getErrorMessage(error.code) };
         }
     }
@@ -129,6 +144,7 @@ class FirebaseAuthClient {
                 user: { uid: user.uid, email: user.email, ...profile }
             };
         } catch (error) {
+            console.error('Firebase login error:', error);
             return { success: false, error: this.getErrorMessage(error.code) };
         }
     }
@@ -137,13 +153,13 @@ class FirebaseAuthClient {
      * Logout user
      */
     async logout() {
-        if (!auth) return { success: true };
-
+        if (!auth) return;
         try {
             await signOut(auth);
-            return { success: true };
+            this.currentUser = null;
+            this.notifyListeners(null);
         } catch (error) {
-            return { success: false, error: error.message };
+            console.error('Firebase logout error:', error);
         }
     }
 
@@ -154,8 +170,11 @@ class FirebaseAuthClient {
         if (!db) return { role: 'user' };
 
         try {
-            const docSnap = await getDoc(doc(db, 'users', uid));
-            return docSnap.exists() ? docSnap.data() : { role: 'user' };
+            const userDoc = await getDoc(doc(db, 'users', uid));
+            if (userDoc.exists()) {
+                return userDoc.data();
+            }
+            return { role: 'user' };
         } catch (error) {
             console.error('Failed to get user profile:', error);
             return { role: 'user' };
@@ -172,9 +191,12 @@ class FirebaseAuthClient {
             'auth/weak-password': 'Password is too weak',
             'auth/user-not-found': 'No account found',
             'auth/wrong-password': 'Incorrect password',
-            'auth/too-many-requests': 'Too many attempts. Try later'
+            'auth/too-many-requests': 'Too many attempts. Try later',
+            'auth/operation-not-allowed': 'Email/Password sign-in is not enabled in Firebase Console',
+            'auth/invalid-api-key': 'Invalid Firebase API Key. Please check your configuration.',
+            'auth/network-request-failed': 'Network error. Please check your connection.'
         };
-        return messages[code] || code;
+        return messages[code] || `Authentication error: ${code}`;
     }
 
     addListener(callback) {
