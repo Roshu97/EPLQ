@@ -20,7 +20,7 @@ import {
     serverTimestamp 
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-const firebaseConfig = {
+const fallbackConfig = {
     apiKey: "AIzaSyAf7qB0O7N-AUMOk0F2x046SKYaRFaDYGo",
     authDomain: "eplq-abfa5.firebaseapp.com",
     projectId: "eplq-abfa5",
@@ -30,7 +30,7 @@ const firebaseConfig = {
     measurementId: "G-LMZ0J3K7HX"
 };
 
-// Initialize Firebase
+// Initialize Firebase variables
 let app = null;
 let auth = null;
 let db = null;
@@ -39,24 +39,53 @@ let db = null;
  * Validate Firebase configuration
  */
 function validateConfig(config) {
+    if (!config || !config.apiKey) return false;
+    
     const isPlaceholder = config.apiKey.includes('YOUR_') || 
                          config.apiKey === "AIzaSyAf7qB0O7N-AUMOk0F2x046SKYaRFaDYGo";
     
     if (isPlaceholder) {
         console.warn('⚠️ Firebase API Key appears to be a placeholder. Authentication will likely fail with 400 errors.');
-        console.warn('Please update the firebaseConfig in public/js/firebase-client.js with your actual project credentials from the Firebase Console.');
+        console.warn('Please update the .env file with your actual project credentials and restart the server.');
     }
+    return !isPlaceholder;
 }
 
-try {
-    validateConfig(firebaseConfig);
-    app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
-    console.log('Firebase initialized successfully');
-} catch (error) {
-    console.warn('Firebase initialization failed:', error.message);
-    console.log('Running in demo mode without Firebase');
+/**
+ * Fetch config from server and initialize Firebase
+ */
+async function initializeFirebase() {
+    let config = fallbackConfig;
+    
+    try {
+        // Try to fetch real config from the server
+        const response = await fetch('/api/firebase-config');
+        if (response.ok) {
+            const serverConfig = await response.json();
+            if (serverConfig && serverConfig.apiKey && !serverConfig.apiKey.includes('your_')) {
+                config = serverConfig;
+                console.log('Firebase configuration loaded from server');
+            }
+        }
+    } catch (error) {
+        console.log('Using fallback Firebase configuration');
+    }
+
+    try {
+        validateConfig(config);
+        app = initializeApp(config);
+        auth = getAuth(app);
+        db = getFirestore(app);
+        console.log('Firebase initialized successfully');
+        
+        // If we have a pending auth service, notify it
+        if (firebaseAuth) {
+            firebaseAuth.init();
+        }
+    } catch (error) {
+        console.warn('Firebase initialization failed:', error.message);
+        console.log('Running in demo mode without Firebase');
+    }
 }
 
 /**
@@ -218,7 +247,9 @@ class FirebaseAuthClient {
 
 // Export singleton instance
 const firebaseAuth = new FirebaseAuthClient();
-firebaseAuth.init();
+
+// Start initialization
+initializeFirebase();
 
 export { firebaseAuth, app, auth, db };
 export default firebaseAuth;
